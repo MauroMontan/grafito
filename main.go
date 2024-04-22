@@ -1,8 +1,8 @@
 package main
 
 import (
-	"example/graphql-client/grafito"
 	"fmt"
+	"github.com/MauroMontan/grafito/grafito"
 )
 
 type Recipe struct {
