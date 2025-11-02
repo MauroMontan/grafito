@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/MauroMontan/grafito/grafito"
 )
 
@@ -25,11 +27,21 @@ func main() {
 
 	client.AddHeader("poweredBy", "Helado4Night").AddHeader("hello", "world")
 
-	payload := "{\"query\":\"query{crockpotRecipes{ name asset spoils }}\"}"
+	q := grafito.Query{
+		Name:      "character",
+		Arguments: map[string]any{},
+		Fields: []string{
+			"name",
+			"asset",
+			"spoils",
+		},
+	}
 
 	data := &Response{}
 
-	err := client.Query(payload, data)
+	ctx := context.TODO()
+
+	err := client.RunQuery(ctx, q, data)
 
 	if err != nil {
 		println("cannot query")
