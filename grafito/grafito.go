@@ -7,24 +7,42 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 type Client struct {
 	url    string
 	Header http.Header
+	http   *http.Client
 }
 
-func NewClient(url string) *Client {
+var HttpDefaultClient = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second, // Timeout de handshake TLS
+	},
+}
+
+func NewClient(url string, c *http.Client) *Client {
+
 	return &Client{
 		url:    url,
 		Header: http.Header{},
+		http:   c,
 	}
 
 }
 
+type graphqlResponse[T any] struct {
+	Data   T     `json:"data"`
+	Errors []any `json:"errors"`
+}
+
 type Query struct {
 	Name      string
-	Arguments map[string]interface{}
+	Arguments map[string]any
 	Fields    []string
 }
 
@@ -71,11 +89,19 @@ func (client *Client) AddHeader(key string, value string) *Client {
 	return client
 }
 
+func (client *Client) SetHeader(key, value string) *Client {
+	client.Header.Set(key, value)
+	return client
+}
+
 func (client *Client) doPost(ctx context.Context, _payload io.Reader) *http.Request {
 
 	req, httpErr := http.NewRequestWithContext(ctx, "POST", client.url, _payload)
 
-	req.Header = client.Header
+	req.Header = make(http.Header)
+	for k, v := range client.Header {
+		req.Header[k] = append([]string(nil), v...)
+	}
 
 	if httpErr != nil {
 		panic(httpErr)
@@ -101,9 +127,7 @@ func (client *Client) run(ctx context.Context, query string, dest any) error {
 
 	req := client.doPost(ctx, _payload)
 
-	fmt.Printf("req.Header: %v\n", req.Header)
-
-	resp, requestErr := http.DefaultClient.Do(req)
+	resp, requestErr := client.http.Do(req)
 
 	if requestErr != nil {
 		panic(requestErr)
@@ -112,12 +136,16 @@ func (client *Client) run(ctx context.Context, query string, dest any) error {
 
 	data, _ := io.ReadAll(resp.Body)
 
-	err := json.Unmarshal(data, &dest)
+	var gqlResp graphqlResponse[json.RawMessage]
 
-	if err != nil {
+	if err := json.Unmarshal(data, &gqlResp); err != nil {
 		return err
 	}
 
-	return nil
+	if len(gqlResp.Errors) > 0 {
+		return fmt.Errorf("graphql errors: %+v", gqlResp.Errors)
+	}
+
+	return json.Unmarshal(gqlResp.Data, dest)
 
 }

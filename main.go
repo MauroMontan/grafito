@@ -7,48 +7,46 @@ import (
 	"github.com/MauroMontan/grafito/grafito"
 )
 
-type Recipe struct {
+type Character struct {
+	ID     string `json:"id"`
 	Name   string `json:"name"`
-	Asset  string `json:"asset"`
-	Spoils string `json:"spoils"`
-}
-
-type Response struct {
-	Data struct {
-		CrockpotRecipes []Recipe `json:"crockpotRecipes"`
-	} `json:"data"`
+	Status string `json:"status"`
 }
 
 func main() {
 
-	url := "https://graphql.dont-starve-together-api.xyz/"
+	url := "https://rickandmortyapi.com/graphql"
 
-	client := grafito.NewClient(url)
+	client := grafito.NewClient(url, grafito.HttpDefaultClient)
 
 	client.AddHeader("poweredBy", "Helado4Night").AddHeader("hello", "world")
 
 	q := grafito.Query{
-		Name:      "character",
+		Name:      "characters",
 		Arguments: map[string]any{},
 		Fields: []string{
-			"name",
-			"asset",
-			"spoils",
+			"results{name}",
 		},
 	}
 
-	data := &Response{}
+	var resp struct {
+		Res struct {
+			Results []Character `json:"results"`
+		} `json:"characters"`
+	}
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
-	err := client.RunQuery(ctx, q, data)
+	err := client.RunQuery(ctx, q, &resp)
 
 	if err != nil {
 		println("cannot query")
 	}
 
-	for _, v := range data.Data.CrockpotRecipes {
-		fmt.Printf("v.Name: %v\n", v.Spoils)
+	for _, char := range resp.Res.Results {
+
+		fmt.Printf("char: %v\n", char.Name)
+
 	}
 
 }
