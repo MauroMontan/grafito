@@ -8,31 +8,15 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/MauroMontan/grafito/grafito/auth"
 )
 
 type Client struct {
-	url    string
+	Url    string
 	Header http.Header
-	http   *http.Client
-}
-
-var HttpDefaultClient = &http.Client{
-	Timeout: 10 * time.Second,
-	Transport: &http.Transport{
-		MaxIdleConns:        10,
-		IdleConnTimeout:     30 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second, // Timeout de handshake TLS
-	},
-}
-
-func NewClient(url string, c *http.Client) *Client {
-
-	return &Client{
-		url:    url,
-		Header: http.Header{},
-		http:   c,
-	}
-
+	Http   *http.Client
+	Auth   auth.Authenticator
 }
 
 type graphqlResponse[T any] struct {
@@ -50,7 +34,25 @@ type graphqlRequest struct {
 	Query string `json:"query"`
 }
 
-// Build genera el string GraphQL del Query
+var HttpDefaultClient = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second, // Timeout de handshake TLS
+	},
+}
+
+func (c *Client) SetAuth(a auth.Authenticator) *Client {
+	c.Auth = a
+	return c
+}
+
+func NewClient(c *Client) *Client {
+	return c
+
+}
+
 func (q Query) Build() string {
 	var buf bytes.Buffer
 	buf.WriteString(q.Name)
@@ -96,11 +98,15 @@ func (client *Client) SetHeader(key, value string) *Client {
 
 func (client *Client) doPost(ctx context.Context, _payload io.Reader) *http.Request {
 
-	req, httpErr := http.NewRequestWithContext(ctx, "POST", client.url, _payload)
+	req, httpErr := http.NewRequestWithContext(ctx, "POST", client.Url, _payload)
 
 	req.Header = make(http.Header)
 	for k, v := range client.Header {
 		req.Header[k] = append([]string(nil), v...)
+	}
+
+	if client.Auth != nil {
+		client.Auth.Apply(req)
 	}
 
 	if httpErr != nil {
@@ -127,7 +133,7 @@ func (client *Client) run(ctx context.Context, query string, dest any) error {
 
 	req := client.doPost(ctx, _payload)
 
-	resp, requestErr := client.http.Do(req)
+	resp, requestErr := client.Http.Do(req)
 
 	if requestErr != nil {
 		panic(requestErr)
